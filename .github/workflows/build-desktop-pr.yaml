@@ -1,0 +1,199 @@
+name: build desktop (PR)
+
+on:
+  push:
+    branches:
+      - feat/desktop-custom-instance-url-clean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-pr-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  meta:
+    name: Resolve build metadata
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+    steps:
+      - name: Set metadata
+        id: meta
+        run: echo "version=0.0.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build ${{ matrix.platform }} (${{ matrix.arch }})
+    needs: meta
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows
+            arch: x64
+            os: windows-latest
+            electron_arch: x64
+          - platform: macos
+            arch: arm64
+            os: macos-15
+            electron_arch: arm64
+          - platform: linux
+            arch: x64
+            os: ubuntu-24.04
+            electron_arch: x64
+    env:
+      APP_WORKDIR: fluxer_app
+      BUILD_CHANNEL: stable
+      VERSION: ${{ needs.meta.outputs.version }}
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Shorten Windows paths
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          subst W: "$env:GITHUB_WORKSPACE"
+          "APP_WORKDIR=W:\fluxer_app" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+          New-Item -ItemType Directory -Force "C:\t" | Out-Null
+          New-Item -ItemType Directory -Force "C:\sq" | Out-Null
+          New-Item -ItemType Directory -Force "C:\ebcache" | Out-Null
+          "TEMP=C:\t" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "TMP=C:\t" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "SQUIRREL_TEMP=C:\sq" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "ELECTRON_BUILDER_CACHE=C:\ebcache" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+          New-Item -ItemType Directory -Force "C:\pnpm-store" | Out-Null
+          "NPM_CONFIG_STORE_DIR=C:\pnpm-store" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "npm_config_store_dir=C:\pnpm-store" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+          "store-dir=C:\pnpm-store" | Set-Content -Path "W:\.npmrc" -Encoding ascii
+          git config --global core.longpaths true
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Resolve pnpm store path (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $store = pnpm store path --silent
+          "PNPM_STORE_PATH=$store" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          New-Item -ItemType Directory -Force $store | Out-Null
+
+      - name: Resolve pnpm store path (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          store="$(pnpm store path --silent)"
+          echo "PNPM_STORE_PATH=$store" >> "$GITHUB_ENV"
+          mkdir -p "$store"
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.PNPM_STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install Python setuptools (macOS)
+        if: matrix.platform == 'macos'
+        run: brew install python-setuptools
+
+      - name: Install Linux dependencies
+        if: matrix.platform == 'linux'
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libx11-dev libxtst-dev libxt-dev libxinerama-dev libxkbcommon-dev libxrandr-dev \
+            ruby ruby-dev build-essential rpm \
+            libpixman-1-dev libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev
+          sudo gem install --no-document fpm
+
+      - name: Install dependencies (monorepo)
+        run: pnpm install --frozen-lockfile
+
+      - name: Install dependencies (desktop)
+        working-directory: fluxer_desktop
+        run: pnpm install --frozen-lockfile
+
+      - name: Update version
+        working-directory: fluxer_desktop
+        run: pnpm version "${{ env.VERSION }}" --no-git-tag-version --allow-same-version
+
+      - name: Build Electron main process
+        working-directory: fluxer_desktop
+        env:
+          BUILD_CHANNEL: stable
+        run: pnpm build
+
+      - name: Build Electron app (macOS, unsigned)
+        if: matrix.platform == 'macos'
+        working-directory: fluxer_desktop
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: pnpm exec electron-builder --config electron-builder.config.cjs --mac --${{ matrix.electron_arch }}
+
+      - name: Build Electron app (Windows, unsigned)
+        if: matrix.platform == 'windows'
+        working-directory: fluxer_desktop
+        env:
+          TEMP: C:\t
+          TMP: C:\t
+          SQUIRREL_TEMP: C:\sq
+          ELECTRON_BUILDER_CACHE: C:\ebcache
+        run: pnpm exec electron-builder --config electron-builder.config.cjs --win --${{ matrix.electron_arch }}
+
+      - name: Build Electron app (Linux)
+        if: matrix.platform == 'linux'
+        working-directory: fluxer_desktop
+        env:
+          USE_SYSTEM_FPM: "true"
+        run: pnpm exec electron-builder --config electron-builder.config.cjs --linux --${{ matrix.electron_arch }}
+
+      - name: Prepare artifacts (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force upload_staging | Out-Null
+          $dist = Join-Path $env:APP_WORKDIR "dist-electron"
+          $sqDir = Join-Path $dist "squirrel-windows"
+          if (Test-Path $sqDir) {
+            Copy-Item -Force -ErrorAction SilentlyContinue "$sqDir\*.exe" "upload_staging\"
+            Copy-Item -Force -ErrorAction SilentlyContinue "$sqDir\*.nupkg" "upload_staging\"
+          }
+          Copy-Item -Force -ErrorAction SilentlyContinue "$dist\*.yml" "upload_staging\"
+          Copy-Item -Force -ErrorAction SilentlyContinue "$dist\*.zip" "upload_staging\"
+          Get-ChildItem -Force upload_staging | Format-Table -AutoSize
+
+      - name: Prepare artifacts (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          mkdir -p upload_staging
+          DIST="${{ env.APP_WORKDIR }}/dist-electron"
+          cp -f "$DIST"/*.dmg upload_staging/ 2>/dev/null || true
+          cp -f "$DIST"/*.zip upload_staging/ 2>/dev/null || true
+          cp -f "$DIST"/*.yml upload_staging/ 2>/dev/null || true
+          cp -f "$DIST"/*.AppImage upload_staging/ 2>/dev/null || true
+          cp -f "$DIST"/*.deb upload_staging/ 2>/dev/null || true
+          cp -f "$DIST"/*.rpm upload_staging/ 2>/dev/null || true
+          cp -f "$DIST"/*.tar.gz upload_staging/ 2>/dev/null || true
+          ls -la upload_staging/
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: fluxer-desktop-${{ matrix.platform }}-${{ matrix.arch }}
+          path: |
+            upload_staging/*
+          retention-days: 7
