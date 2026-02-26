@@ -99,7 +99,7 @@ async function buildPreload() {
 		platform: 'node',
 		target: 'node20',
 		format: 'cjs',
-		outfile: path.join(DIST_DIR, 'preload', 'index.js'),
+		outfile: path.join(DIST_DIR, 'preload', 'index.cjs'),
 		minify: isProduction,
 		sourcemap: true,
 		external: electronExternals,
