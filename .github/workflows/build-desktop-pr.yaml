@@ -166,7 +166,7 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force upload_staging | Out-Null
-          $dist = Join-Path $env:APP_WORKDIR "dist-electron"
+          $dist = Join-Path "fluxer_desktop" "dist-electron"
           $sqDir = Join-Path $dist "squirrel-windows"
           if (Test-Path $sqDir) {
             Copy-Item -Force -ErrorAction SilentlyContinue "$sqDir\*.exe" "upload_staging\"
@@ -180,7 +180,7 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           mkdir -p upload_staging
-          DIST="${{ env.APP_WORKDIR }}/dist-electron"
+          DIST="fluxer_desktop/dist-electron"
           cp -f "$DIST"/*.dmg upload_staging/ 2>/dev/null || true
           cp -f "$DIST"/*.zip upload_staging/ 2>/dev/null || true
           cp -f "$DIST"/*.yml upload_staging/ 2>/dev/null || true
