@@ -17,7 +17,6 @@
  * along with Fluxer. If not, see <https://www.gnu.org/licenses/>.
  */
 
-import * as AuthenticationActionCreators from '@app/actions/AuthenticationActionCreators';
 import * as GiftActionCreators from '@app/actions/GiftActionCreators';
 import * as InviteActionCreators from '@app/actions/InviteActionCreators';
 import * as ModalActionCreators from '@app/actions/ModalActionCreators';
@@ -32,7 +31,6 @@ import UserStore from '@app/stores/UserStore';
 import {APP_PROTOCOL_PREFIX} from '@app/utils/AppProtocol';
 import {getElectronAPI} from '@app/utils/NativeUtils';
 import * as RouterUtils from '@app/utils/RouterUtils';
-import {completeSsoLogin} from '@app/viewmodels/auth/AuthFlow';
 import {ME} from '@fluxer/constants/src/AppConstants';
 import {isProbablyAValidSnowflake} from '@fluxer/snowflake/src/SnowflakeUtils';
 import React from 'react';
@@ -126,6 +124,11 @@ async function handleSsoCallbackDeepLink(url: URL): Promise<boolean> {
 	}
 
 	try {
+		// Dynamic imports to avoid circular dependency (DeepLinkUtils is loaded early from App.tsx)
+		const [{completeSsoLogin}, AuthenticationActionCreators] = await Promise.all([
+			import('@app/viewmodels/auth/AuthFlow'),
+			import('@app/actions/AuthenticationActionCreators'),
+		]);
 		const result = await completeSsoLogin({code, state});
 		await AuthenticationActionCreators.completeLogin({
 			token: result.token,
