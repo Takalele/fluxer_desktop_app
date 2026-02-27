@@ -203,6 +203,7 @@ export type HandoffStatusResponse = z.infer<typeof HandoffStatusResponse>;
 
 export const SsoStartRequest = z.object({
 	redirect_to: createStringType(1, 2048).nullish().describe('URL to redirect to after SSO completion'),
+	desktop: z.boolean().nullish().describe('When true, use fluxer:// deep link as redirect URI for desktop app SSO'),
 });
 export type SsoStartRequest = z.infer<typeof SsoStartRequest>;
 

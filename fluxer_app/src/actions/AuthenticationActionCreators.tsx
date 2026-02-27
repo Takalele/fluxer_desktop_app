@@ -599,10 +599,10 @@ export async function completeLogin({
 	}
 }
 
-export async function startSso(redirectTo?: string): Promise<{authorization_url: string}> {
+export async function startSso(redirectTo?: string, desktop?: boolean): Promise<{authorization_url: string}> {
 	const response = await http.post<{authorization_url: string}>({
 		url: Endpoints.AUTH_SSO_START,
-		body: {redirect_to: redirectTo},
+		body: {redirect_to: redirectTo, desktop: desktop || undefined},
 		headers: withPlatformHeader(),
 	});
 	return response.body;

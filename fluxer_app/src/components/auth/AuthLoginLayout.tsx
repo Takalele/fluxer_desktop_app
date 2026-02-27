@@ -33,7 +33,7 @@ import {IS_DEV} from '@app/lib/Env';
 import {type Account, SessionExpiredError} from '@app/lib/SessionManager';
 import AccountManager from '@app/stores/AccountManager';
 import RuntimeConfigStore from '@app/stores/RuntimeConfigStore';
-import {isDesktop} from '@app/utils/NativeUtils';
+import {getElectronAPI, isDesktop} from '@app/utils/NativeUtils';
 import * as RouterUtils from '@app/utils/RouterUtils';
 import {type IpAuthorizationChallenge, type LoginSuccessPayload, startSsoLogin} from '@app/viewmodels/auth/AuthFlow';
 import {Trans, useLingui} from '@lingui/react/macro';
@@ -188,10 +188,17 @@ export const AuthLoginLayout = observer(function AuthLoginLayout({
 		if (!ssoConfig?.enabled) return;
 		try {
 			setIsStartingSso(true);
+			const electronApi = getElectronAPI();
+			const useDesktopFlow = Boolean(electronApi?.openExternal);
 			const {authorizationUrl} = await startSsoLogin({
 				redirectTo: redirectPath,
+				desktop: useDesktopFlow || undefined,
 			});
-			window.location.assign(authorizationUrl);
+			if (useDesktopFlow) {
+				await electronApi!.openExternal(authorizationUrl);
+			} else {
+				window.location.assign(authorizationUrl);
+			}
 		} catch (error) {
 			setSwitchError(error instanceof Error ? error.message : t`Failed to start SSO`);
 		} finally {

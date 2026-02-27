@@ -162,8 +162,8 @@ export async function authenticateWithWebAuthn({
 	return {token: result.token, userId: result.user_id};
 }
 
-export async function startSsoLogin({redirectTo}: {redirectTo?: string}): Promise<{authorizationUrl: string}> {
-	const result = await AuthenticationActionCreators.startSso(redirectTo);
+export async function startSsoLogin({redirectTo, desktop}: {redirectTo?: string; desktop?: boolean}): Promise<{authorizationUrl: string}> {
+	const result = await AuthenticationActionCreators.startSso(redirectTo, desktop);
 	return {authorizationUrl: result.authorization_url};
 }
 

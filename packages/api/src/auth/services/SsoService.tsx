@@ -58,6 +58,7 @@ interface SsoStatePayload {
 	codeVerifier: string;
 	nonce: string;
 	redirectTo?: string;
+	desktop?: boolean;
 	createdAt: number;
 }
 
@@ -124,7 +125,7 @@ export class SsoService {
 		return config.enabled && config.ready;
 	}
 
-	async startLogin(redirectTo?: string): Promise<{authorization_url: string; state: string; redirect_uri: string}> {
+	async startLogin(redirectTo?: string, desktop?: boolean): Promise<{authorization_url: string; state: string; redirect_uri: string}> {
 		const config = await this.requireReadyConfig();
 
 		const state = this.randomState();
@@ -132,10 +133,13 @@ export class SsoService {
 		const codeChallenge = this.buildCodeChallenge(codeVerifier);
 		const nonce = this.randomNonce();
 
+		const redirectUri = desktop ? 'fluxer://auth/sso/callback' : config.redirectUri;
+
 		const statePayload: SsoStatePayload = {
 			codeVerifier,
 			nonce,
 			redirectTo: sanitizeSsoRedirectTo(redirectTo),
+			desktop: desktop ?? undefined,
 			createdAt: Date.now(),
 		};
 
@@ -144,7 +148,7 @@ export class SsoService {
 		const searchParams = new URLSearchParams({
 			response_type: 'code',
 			client_id: config.clientId ?? '',
-			redirect_uri: config.redirectUri,
+			redirect_uri: redirectUri,
 			scope: config.scope,
 			state,
 			code_challenge: codeChallenge,
@@ -187,10 +191,13 @@ export class SsoService {
 			throw InputValidationError.create('state', 'Invalid or expired SSO state');
 		}
 
+		const redirectUri = statePayload.desktop ? 'fluxer://auth/sso/callback' : config.redirectUri;
+
 		const tokenResponse = await this.exchangeCode({
 			code,
 			codeVerifier: statePayload.codeVerifier,
 			config,
+			redirectUri,
 		});
 
 		const claims = await this.resolveClaims(tokenResponse, config, statePayload.nonce);
@@ -431,10 +438,12 @@ export class SsoService {
 		code,
 		codeVerifier,
 		config,
+		redirectUri,
 	}: {
 		code: string;
 		codeVerifier: string;
 		config: ResolvedSsoConfig;
+		redirectUri?: string;
 	}): Promise<{id_token?: string; access_token?: string}> {
 		if (config.isTestProvider) {
 			return {id_token: code};
@@ -443,7 +452,7 @@ export class SsoService {
 		const body = new URLSearchParams({
 			grant_type: 'authorization_code',
 			code,
-			redirect_uri: config.redirectUri,
+			redirect_uri: redirectUri ?? config.redirectUri,
 			client_id: config.clientId ?? '',
 			code_verifier: codeVerifier,
 		});

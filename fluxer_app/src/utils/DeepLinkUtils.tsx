@@ -17,6 +17,7 @@
  * along with Fluxer. If not, see <https://www.gnu.org/licenses/>.
  */
 
+import * as AuthenticationActionCreators from '@app/actions/AuthenticationActionCreators';
 import * as GiftActionCreators from '@app/actions/GiftActionCreators';
 import * as InviteActionCreators from '@app/actions/InviteActionCreators';
 import * as ModalActionCreators from '@app/actions/ModalActionCreators';
@@ -31,6 +32,7 @@ import UserStore from '@app/stores/UserStore';
 import {APP_PROTOCOL_PREFIX} from '@app/utils/AppProtocol';
 import {getElectronAPI} from '@app/utils/NativeUtils';
 import * as RouterUtils from '@app/utils/RouterUtils';
+import {completeSsoLogin} from '@app/viewmodels/auth/AuthFlow';
 import {ME} from '@fluxer/constants/src/AppConstants';
 import {isProbablyAValidSnowflake} from '@fluxer/snowflake/src/SnowflakeUtils';
 import React from 'react';
@@ -112,7 +114,41 @@ const navigateForTarget = (target: DeepLinkTarget) => {
 	RouterUtils.transitionTo(dest);
 };
 
+async function handleSsoCallbackDeepLink(url: URL): Promise<boolean> {
+	if (url.host !== 'auth' || url.pathname !== '/sso/callback') return false;
+
+	const code = url.searchParams.get('code');
+	const state = url.searchParams.get('state');
+
+	if (!code || !state) {
+		logger.error('SSO callback deep link missing code or state');
+		return true;
+	}
+
+	try {
+		const result = await completeSsoLogin({code, state});
+		await AuthenticationActionCreators.completeLogin({
+			token: result.token,
+			userId: result.userId,
+		});
+		RouterUtils.replaceWith(result.redirect_to || '/');
+	} catch (error) {
+		logger.error('Failed to complete SSO login from deep link', error);
+		RouterUtils.replaceWith('/login');
+	}
+
+	return true;
+}
+
 export function handleDeepLinkUrl(rawUrl: string): boolean {
+	try {
+		const parsed = new URL(rawUrl);
+		if (parsed.protocol === 'fluxer:' && parsed.host === 'auth' && parsed.pathname === '/sso/callback') {
+			void handleSsoCallbackDeepLink(parsed);
+			return true;
+		}
+	} catch {}
+
 	const target = parseDeepLink(rawUrl);
 	if (!target) return false;
 	navigateForTarget(target);
