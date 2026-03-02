@@ -67,8 +67,8 @@ const BASE_FRAMERATE_OPTIONS: Array<Omit<FramerateOption, 'isPremium'>> = [
 	{value: 60, label: msg`60 FPS`},
 ];
 
-const PREMIUM_RESOLUTION_VALUES: Set<ResolutionOption['value']> = new Set(['high', 'ultra', '4k']);
-const PREMIUM_FRAMERATE_VALUES: Set<number> = new Set([60]);
+const PREMIUM_RESOLUTION_VALUES: Set<ResolutionOption['value']> = new Set();
+const PREMIUM_FRAMERATE_VALUES: Set<number> = new Set();
 
 const getResolutionOptions = (_hasHigherQuality: boolean): Array<ResolutionOption> => {
 	return BASE_RESOLUTION_OPTIONS.map((option) => ({
@@ -106,16 +106,9 @@ export function useScreenShareSettingsModal({onStartShare}: ScreenShareSettingsM
 
 	const [isSharing, setIsSharing] = useState(false);
 	const [selectedResolution, setSelectedResolution] = useState<'low' | 'medium' | 'high' | 'ultra' | '4k'>(
-		!hasHigherQuality &&
-			(voiceSettings.screenshareResolution === 'high' ||
-				voiceSettings.screenshareResolution === 'ultra' ||
-				voiceSettings.screenshareResolution === '4k')
-			? 'medium'
-			: voiceSettings.screenshareResolution,
+		voiceSettings.screenshareResolution,
 	);
-	const [selectedFrameRate, setSelectedFrameRate] = useState<number>(
-		!hasHigherQuality && voiceSettings.videoFrameRate > 30 ? 30 : voiceSettings.videoFrameRate,
-	);
+	const [selectedFrameRate, setSelectedFrameRate] = useState<number>(voiceSettings.videoFrameRate);
 	const [includeAudio, setIncludeAudioState] = useState<boolean>(
 		supportsScreenShareAudio && LocalVoiceStateStore.getSelfStreamAudio(),
 	);

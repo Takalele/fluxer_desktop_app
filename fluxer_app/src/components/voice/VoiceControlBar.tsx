@@ -77,7 +77,7 @@ import {
 	SpeakerSlashIcon,
 } from '@phosphor-icons/react';
 import {clsx} from 'clsx';
-import {ScreenSharePresets, Track} from 'livekit-client';
+import {ScreenSharePresets, Track, VideoPreset} from 'livekit-client';
 import {observer} from 'mobx-react-lite';
 import type React from 'react';
 import {useCallback, useEffect, useMemo, useState} from 'react';
@@ -88,8 +88,8 @@ const SCREEN_SHARE_PRESETS = {
 	low: ScreenSharePresets.h360fps15,
 	medium: ScreenSharePresets.h720fps30,
 	high: ScreenSharePresets.h1080fps30,
-	ultra: ScreenSharePresets.h1080fps30,
-	'4k': ScreenSharePresets.original,
+	ultra: new VideoPreset(2560, 1440, 12_000_000, 30, 'medium'),
+	'4k': new VideoPreset(3840, 2160, 20_000_000, 30, 'medium'),
 } as const;
 
 type ScreenShareResolution = keyof typeof SCREEN_SHARE_PRESETS;
@@ -368,7 +368,17 @@ const VoiceControlBarInner = observer(function VoiceControlBarInner() {
 				},
 			},
 			publishOptions: {
-				screenShareEncoding: preset.encoding,
+				screenShareEncoding: {
+					...preset.encoding,
+					maxFramerate: frameRate,
+				},
+				// Disable simulcast for screen share — we want the full bitrate
+				// budget on a single high-quality layer, not split across simulcast layers.
+				simulcast: false,
+				// LiveKit defaults screen share to 'maintain-resolution' which makes
+				// the encoder drop frames to preserve sharpness. For high-fps streaming
+				// we want 'balanced' so the encoder can hit the target framerate.
+				degradationPreference: 'balanced' as RTCDegradationPreference,
 			},
 		};
 	}, []);

@@ -44,10 +44,15 @@ const logger = new Logger('VoiceScreenShareManager');
 
 function getPreferredScreenShareCodec(): VideoCodec {
 	if (VoiceSettingsStore.getScreenShareHardwareAcceleration()) {
-		return 'h265';
+		// H.264 has the broadest hardware encoding support across browsers and GPUs.
+		// H.265 is not supported for WebRTC encoding in any major browser.
+		// VP9 triggers LiveKit's SVC path (L1T3) for screen share which severely
+		// limits framerate in Chrome.
+		return 'h264';
 	}
 
-	return 'vp9';
+	// VP8 as software fallback — works everywhere, no SVC path issues.
+	return 'vp8';
 }
 
 class VoiceScreenShareManager {

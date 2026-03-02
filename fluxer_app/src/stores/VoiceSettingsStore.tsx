@@ -182,21 +182,7 @@ class VoiceSettingsStore {
 	}
 
 	private sanitizePremiumSettings(): void {
-		if (
-			this.screenshareResolution === 'high' ||
-			this.screenshareResolution === 'ultra' ||
-			this.screenshareResolution === '4k'
-		) {
-			this.screenshareResolution = 'medium';
-		}
-
-		if (this.cameraResolution === 'high') {
-			this.cameraResolution = 'medium';
-		}
-
-		if (this.videoFrameRate > 30) {
-			this.videoFrameRate = 30;
-		}
+		// All quality options are available to all users on self-hosted instances.
 	}
 
 	private hasHigherVideoQuality(): boolean {
@@ -350,21 +336,7 @@ class VoiceSettingsStore {
 			cameraResolution = 'medium';
 		}
 
-		const hasHigherQuality = this.hasHigherVideoQuality();
-
-		if (!hasHigherQuality) {
-			if (screenshareResolution === 'high' || screenshareResolution === 'ultra' || screenshareResolution === '4k') {
-				screenshareResolution = 'medium';
-			}
-			if (cameraResolution === 'high') {
-				cameraResolution = 'medium';
-			}
-			videoFrameRate = Math.min(30, videoFrameRate);
-
-			if (backgroundImages.length > 3) {
-				backgroundImages = backgroundImages.slice(0, 3);
-			}
-		}
+		// All quality options are available to all users on self-hosted instances.
 
 		if (backgroundImageId !== NONE_BACKGROUND_ID && backgroundImageId !== BLUR_BACKGROUND_ID) {
 			const imageExists = backgroundImages.some((img: BackgroundImage) => img.id === backgroundImageId);
